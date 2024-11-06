@@ -26,10 +26,10 @@ RUN apt-get update && \
 RUN apt-get update && \
     apt-get install -y bash curl unzip python3 python3-dev python3-pip r-base && \
     pip3 install --no-cache --upgrade pip && \
-    pip3 install --no-cache jupyterlab==4.3.0 jupyter notebook==7.2.2 py2neo neo4j networkx matplotlib pyvis yfiles_jupyter_graphs graphdatascience python-louvain openai && \
+    pip3 install --no-cache jupyterlab==4.3.0 jupyter notebook py2neo neo4j networkx matplotlib pyvis yfiles_jupyter_graphs graphdatascience python-louvain openai && \
     rm -rf /var/lib/apt/lists/* /tmp/*
 
-RUN openai migrate && pip3 install --upgrade openai
+RUN pip3 install --upgrade openai
 
 RUN pip3 install --no-cache-dir jupyterlab-link-share
 
