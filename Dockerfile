@@ -23,20 +23,33 @@ ENV PATH="/opt/conda/bin:$PATH"
 COPY --from=graal-jdk-image /opt/graalvm-ce-* /opt/java/graalvm
 
 # Installing system dependencies
+
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
-    apt-get install -y \
-        jq \
+    apt-get install -y --fix-missing \
         sudo \
+        jq \
         bash \
         curl \
         unzip \
         python3 \
         python3-dev \
         python3-pip \
+        build-essential \
+        libzmq3-dev \
+        git \
+        wget \
+        pandoc \
         r-base && \
+    apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/*
 
-# Instale o Miniconda
+RUN adduser --disabled-password --gecos "" ${USER} && \
+    usermod -aG sudo ${USER} && \
+    echo "${USER} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
+    mkdir -p ${WORKDIR}/works
+
+# Install Miniconda
 RUN curl -fsSL https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -o miniconda.sh && \
     bash miniconda.sh -b -p /opt/conda && \
     rm miniconda.sh && \
@@ -64,8 +77,8 @@ RUN /opt/conda/bin/mamba clean --all --yes
 RUN /opt/conda/bin/mamba install -c conda-forge \
     python=3.10 \
     jupyterlab=4.2.6 \
-    jupyter \
-    notebook \
+    jupyter==1.0.0 \
+    notebook=7.2.2 \
     py2neo \
     networkx \
     matplotlib \
@@ -86,7 +99,9 @@ RUN pip install \
     jupyterlab-link-share \
     openai \
     python-lsp-server \
-    nbimporter
+    nbimporter \
+    rise \
+    tornado
 
 RUN pip3 install --upgrade openai
 
@@ -122,18 +137,23 @@ RUN mkdir -p /usr/local/share/jupyter/kernels/java && \
       "language": "java" \
     }' > /usr/local/share/jupyter/kernels/java/kernel.json
 
-RUN adduser --disabled-password --gecos "" ${USER} && \
-    usermod -aG sudo ${USER} && \
-    echo "${USER} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
-    mkdir -p ${WORKDIR}/works
+# Install Julia
+RUN curl -fsSL https://julialang-s3.julialang.org/bin/linux/x64/1.9/julia-1.9-latest-linux-x86_64.tar.gz -o julia.tar.gz && \
+    tar -xzf julia.tar.gz -C /opt && \
+    rm julia.tar.gz && \
+    ln -s /opt/julia-1.9*/bin/julia /usr/local/bin/julia
 
 USER ${USER}
+
+# Install IJulia and configure the Julia kernel for Jupyter
+RUN julia -e 'using Pkg; Pkg.update(); Pkg.add(["IJulia", "Plots", "DataFrames", "CSV", "Distributions"]); using IJulia; installkernel("Julia")'
+
 
 RUN mkdir -p ${JUPYTER_CONFIG_DIR} && \
     yes "y" | jupyter server --generate-config && \
     ## Uncomment the two lines below to enable password login.
-    # python3 -c "from jupyter_server.auth import passwd; print(passwd('Password1'))" > ${JUPYTER_CONFIG_DIR}/.jupyter_password && \
-    # echo "c.PasswordIdentityProvider.hashed_password = open('${JUPYTER_CONFIG_DIR}/.jupyter_password').read().strip()" >> ${JUPYTER_CONFIG_DIR}/jupyter_server_config.py && \
+    python3 -c "from jupyter_server.auth import passwd; print(passwd('Password1'))" > ${JUPYTER_CONFIG_DIR}/.jupyter_password && \
+    echo "c.PasswordIdentityProvider.hashed_password = open('${JUPYTER_CONFIG_DIR}/.jupyter_password').read().strip()" >> ${JUPYTER_CONFIG_DIR}/jupyter_server_config.py && \
     echo "c.ServerApp.open_browser = False" >> ${JUPYTER_CONFIG_DIR}/jupyter_server_config.py && \
     echo "c.ServerApp.allow_origin = '*'" >> ${JUPYTER_CONFIG_DIR}/jupyter_server_config.py && \
     echo "c.ServerApp.allow_credentials = True" >> ${JUPYTER_CONFIG_DIR}/jupyter_server_config.py && \
