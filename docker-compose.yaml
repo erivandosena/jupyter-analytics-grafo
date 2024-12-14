@@ -9,7 +9,7 @@ services:
       dockerfile: Dockerfile
     container_name: jupyterlab-tools
     ports:
-      - "8888:8888"
+      - "8887:8888"
     healthcheck:
       test: ["CMD-SHELL", "curl -s http://localhost:8888/api/kernels | grep -q 'kernel_id' || exit 1"]
       interval: 30s
@@ -18,7 +18,11 @@ services:
       start_period: 15s
     environment:
       JUPYTER_ENABLE_LAB: "yes"
-      OPENAI_API_KEY: "<YOUR_KEY>"
+      OPENAI_API_KEY: "YOUR_KEY_GPT"
+      NVIDIA_API_KEY: "YOUR_KEY_LLAMA"
+      GEMINI_API_KEY: "YOUR_KEY_GEMINI"
+      ANTHROPIC_API_KEY: "YOUR_KEY_CLAUDE"
+      HF_API_TOKEN=: "YOUR_KEY_HUGGING-FACE"
       JUPYTERLAB_MEM_LIMIT: "2G"
     volumes:
       - ./workspace:/home/jupyter/works
