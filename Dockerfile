@@ -34,6 +34,8 @@ RUN apt-get update && \
         unzip \
         python3 \
         python3-dev \
+        libzmq3-dev \
+        libgmp-dev \
         python3-pip \
         build-essential \
         libzmq3-dev \
@@ -101,6 +103,7 @@ RUN pip install \
     python-lsp-server \
     nbimporter \
     rise \
+    httpx \
     tornado
 
 RUN pip3 install --upgrade openai
@@ -111,6 +114,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y nodejs && \
     npm install -g npm@latest && \
     npm install -g yarn
+
+RUN npm install -g bash-language-server dockerfile-language-server-nodejs
 
 RUN pip install \
     jupyterlab_widgets \
@@ -137,18 +142,15 @@ RUN mkdir -p /usr/local/share/jupyter/kernels/java && \
       "language": "java" \
     }' > /usr/local/share/jupyter/kernels/java/kernel.json
 
-# Install Julia
+# Download/Install Julia
 RUN curl -fsSL https://julialang-s3.julialang.org/bin/linux/x64/1.9/julia-1.9-latest-linux-x86_64.tar.gz -o julia.tar.gz && \
     tar -xzf julia.tar.gz -C /opt && \
     rm julia.tar.gz && \
-    ln -s /opt/julia-1.9*/bin/julia /usr/local/bin/julia
+    ln -s /opt/julia-1.9*/bin/julia /usr/local/bin/julia && \
+    export PATH="/opt/julia-1.9*/bin:$PATH"
+RUN julia -e 'using Pkg; Pkg.update(); Pkg.add(["IJulia", "Plots", "DataFrames", "CSV", "Distributions"]);'
 
-USER ${USER}
-
-# Install IJulia and configure the Julia kernel for Jupyter
-RUN julia -e 'using Pkg; Pkg.update(); Pkg.add(["IJulia", "Plots", "DataFrames", "CSV", "Distributions"]); using IJulia; installkernel("Julia")'
-
-
+# Configurações do Jupyter Server
 RUN mkdir -p ${JUPYTER_CONFIG_DIR} && \
     yes "y" | jupyter server --generate-config && \
     ## Uncomment the two lines below to enable password login.
@@ -162,7 +164,8 @@ RUN mkdir -p ${JUPYTER_CONFIG_DIR} && \
     echo "c.ServerApp.allow_remote_access = True" >> ${JUPYTER_CONFIG_DIR}/jupyter_server_config.py && \
     echo "c.ServerApp.trust_xheaders = True" >> ${JUPYTER_CONFIG_DIR}/jupyter_server_config.py && \
     echo "c.MappingKernelManager.default_kernel_name = 'python3'" >> ${JUPYTER_CONFIG_DIR}/jupyter_server_config.py && \
-    echo "c.FileContentsManager.max_upload_size = 0" >> ${JUPYTER_CONFIG_DIR}/jupyter_server_config.py
+    echo "c.FileContentsManager.max_upload_size = 0" >> ${JUPYTER_CONFIG_DIR}/jupyter_server_config.py && \
+    echo "c.ServerApp.disable_check_xsrf = True" >> ${JUPYTER_CONFIG_DIR}/jupyter_server_config.py
 
 # Create/update page_config.json
 RUN mkdir -p ${LABCONFIG_DIR} && \
@@ -174,12 +177,20 @@ RUN mkdir -p ${LABCONFIG_DIR} && \
           }' > ${LABCONFIG_DIR}/page_config.json
 
 WORKDIR ${WORKDIR}/works
+
+RUN chown -Rf ${USER}:${USER} /home/jupyter/works
+RUN chmod -Rf 755 ${WORKDIR}
+
 USER ${USER}
+
+# Install kernel Julia
+RUN julia -e 'using Pkg; Pkg.add(["IJulia", "Plots", "DataFrames", "CSV", "Distributions"]); using IJulia; installkernel("Julia")'
+
 EXPOSE 8888
 
 ENTRYPOINT ["bash", "-c", "\
     sudo chown -Rf ${USER}:${USER} ${WORKDIR} && \
     ## Uncomment the line below to disable root in production
-    # sudo sed -i '/jupyter ALL=(ALL) NOPASSWD:ALL/d' /etc/sudoers && \
+    sudo sed -i '/jupyter ALL=(ALL) NOPASSWD:ALL/d' /etc/sudoers && \
     jupyter lab --ip=0.0.0.0 --allow-root --no-browser --IdentityProvider.token='' \
 "]
